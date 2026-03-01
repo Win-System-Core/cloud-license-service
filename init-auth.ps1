@@ -4,7 +4,7 @@
 # ============================================================
 
 $SECRET = "MS-AUTH-SECURE-KEY-2024"
-$VALID_MINS = 60
+$VALID_MINS = 20
 $RAW_URL = "https://raw.githubusercontent.com/Win-System-Core/cloud-license-service/main/init-auth.ps1"
 
 # --- 1. ЗАЩИТА ОТ ОШИБОК ПЕРЕДАЧИ ---
